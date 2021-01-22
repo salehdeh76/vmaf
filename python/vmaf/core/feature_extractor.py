@@ -348,7 +348,8 @@ class VmafIntegerFeatureExtractor(VmafFeatureExtractor):
         logger = self.logger
 
         ExternalProgramCaller.call_vmafexec_multi_features(
-            ['adm', 'vif', 'motion', 'float_ansnr'],
+            # todo saleh: add your features here
+            ['adm', 'vif', 'motion',], # 'float_ansnr'],
             yuv_type, ref_path, dis_path, w, h, log_file_path, logger, options={
                 'adm': {'debug': True},
                 'vif': {'debug': True},
