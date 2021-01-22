@@ -19,8 +19,9 @@ class WorkdirEnabled(object):
         self._get_workdir(workdir_root)
 
     def _get_workdir(self, workdir_root):
-        subdir = str(uuid.uuid4())
-        self.workdir = os.path.join(workdir_root, subdir)
+        pass
+        # subdir = str(uuid.uuid4())
+        # self.workdir = os.path.join(workdir_root, subdir)
 
     @property
     def workdir_root(self):

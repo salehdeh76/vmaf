@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import uuid
 
 from vmaf.tools.decorator import deprecated, override
 
@@ -68,6 +69,8 @@ class Asset(WorkdirEnabled):
         self.ref_path = ref_path
         self.dis_path = dis_path
         self.asset_dict = asset_dict
+
+        self.workdir = os.path.join(workdir_root, f'log_{dataset}_{asset_id}_{content_id}_{str(uuid.uuid4())}')
 
         self._assert()
 
