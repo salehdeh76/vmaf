@@ -15,7 +15,7 @@ option('enable_asm',
 
 option('enable_avx512',
     type: 'boolean',
-    value: false,
+    value: true,
     description: 'Build AVX-512 asm files, requires nasm 2.14')
 
 option('built_in_models',
@@ -25,5 +25,5 @@ option('built_in_models',
 
 option('enable_float',
     type: 'boolean',
-    value: false,
+    value: true,
     description: 'Compile floating-point feature extractors into the library')

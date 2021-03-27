@@ -558,7 +558,7 @@ class PsnrFeatureExtractor(VmafexecFeatureExtractorMixin, FeatureExtractor):
         h=quality_height
         logger = self.logger
 
-        ExternalProgramCaller.call_vmafexec_single_feature('float_psnr', yuv_type, ref_path, dis_path, w, h, log_file_path, logger)
+        ExternalProgramCaller.call_vmafexec_single_feature('psnr', yuv_type, ref_path, dis_path, w, h, log_file_path, logger)
 
 
 class MomentFeatureExtractor(FeatureExtractor):

@@ -1,4 +1,5 @@
 import json
+import statistics
 import tempfile
 from abc import ABCMeta, abstractmethod
 import os
@@ -153,18 +154,18 @@ class RegressorMixin(object):
         return stats
 
     @staticmethod
-    def format_stats_for_plot(stats):
+    def format_stats_for_plot(stats): #todo saleh PCC
         if stats is None:
             return '(Invalid Stats)'
         else:
             if 'AUC_DS' in stats and 'AUC_BW' in stats and 'ResPow' in stats and 'ResPowNormalized' in stats:
-                return '(SRCC: {srcc:.3f}, PCC: {pcc:.3f}, RMSE: {rmse:.3f},\n AUC: {auc_ds:.3f}/{auc_bw:.3f}, ' \
+                return '(SROCC: {srcc:.3f}, PLCC: {pcc:.3f}, RMSE: {rmse:.3f},\n AUC: {auc_ds:.3f}/{auc_bw:.3f}, ' \
                        'ResPow: {respow:.3f}/{respownorm:.3f})'. \
                     format(srcc=stats['SRCC'], pcc=stats['PCC'], rmse=stats['RMSE'],
                            auc_ds=stats['AUC_DS'], auc_bw=stats['AUC_BW'],
                            respow=stats['ResPow'], respownorm=stats['ResPowNormalized'])
             else:
-                return '(SRCC: {srcc:.3f}, PCC: {pcc:.3f}, RMSE: {rmse:.3f})'. \
+                return '(SROCC: {srcc:.3f}, PLCC: {pcc:.3f}, RMSE: {rmse:.3f})'. \
                     format(srcc=stats['SRCC'], pcc=stats['PCC'], rmse=stats['RMSE'])
 
     @staticmethod
@@ -257,14 +258,15 @@ class RegressorMixin(object):
         point_labels = kwargs['point_labels'] if 'point_labels' in kwargs else None
 
         if content_ids is None:
-            ax.scatter(stats['ys_label'], stats['ys_label_pred'])
+            ax.scatter(stats['ys_label'], stats['ys_label_pred'], c='k')
+
         else:
-            assert len(stats['ys_label']) == len(content_ids)
+            # assert len(stats['ys_label']) == len(content_ids)
 
             unique_content_ids = list(set(content_ids))
             from vmaf import plt
-            cmap = plt.get_cmap('jet')
-            colors = [cmap(i) for i in np.linspace(0, 1, len(unique_content_ids))]
+            cmap = plt.get_cmap('gray')
+            colors = [cmap(0) for i in np.linspace(0, 1, len(unique_content_ids))] #todo saleh
             for idx, curr_content_id in enumerate(unique_content_ids):
                 curr_idxs = indices(content_ids, lambda cid: cid == curr_content_id)
                 curr_ys_label = np.array(stats['ys_label'])[curr_idxs]
@@ -562,7 +564,7 @@ class TrainTestModel(TypeVersionEnabled):
     def _preproc_train(self, xys):
         self.model_type = self.TYPE
         assert 'label' in xys
-        assert 'content_id' in xys
+        # assert 'content_id' in xys
         feature_names = self.get_ordered_feature_names(xys)
         self.feature_names = feature_names
         # note that feature_names is property (write). below cannot yet use
@@ -769,6 +771,29 @@ class TrainTestModel(TypeVersionEnabled):
             xs[name] = list(map(lambda result: result[name], _results))
         return xs
 
+
+    @classmethod
+    def get_xs_from_results_weighted(cls, results):
+        """
+        w
+        """
+        feature_names = results[0].get_ordered_list_score_key()
+        feature_names = list(feature_names)
+        cls._assert_dimension(feature_names, results)
+
+        xs = {}
+        for name in feature_names:
+            feature_values = {}
+            _results = results
+            for r in _results:
+                panorama_id = r.asset.asset_dict['panorama_id']
+                try:
+                    feature_values[panorama_id] += [r[name]] * r.asset.asset_dict['selection_weight']
+                except KeyError:
+                    feature_values[panorama_id] = [r[name]] * r.asset.asset_dict['selection_weight']
+            xs[name] = list(statistics.mean(feature_values[k]) for k in feature_values.keys())
+        return xs
+
     @classmethod
     def _assert_dimension(cls, feature_names, results):
         # by default, only accept result[feature_name] that is a scalar
@@ -811,6 +836,23 @@ class TrainTestModel(TypeVersionEnabled):
         return ys
 
     @classmethod
+    def get_ys_from_results_weighted(cls, results):
+        ys = {}
+        _results = results
+        seen_panaroma_ids = []
+        labels =[]
+        # content_ids =[]
+        for r in _results:
+            if r.asset.asset_dict['panorama_id'] in seen_panaroma_ids:
+                continue
+            seen_panaroma_ids.append(r.asset.asset_dict['panorama_id'])
+            labels.append(r.asset.groundtruth)
+            # content_ids.append(r.asset.content_id)
+        ys['label'] = labels
+        # ys['content_id'] = content_ids
+        return ys
+
+    @classmethod
     def get_xys_from_results(cls, results, indexs=None, aggregate=True):
         """
         :param results: list of BasicResult, or pandas.DataFrame
@@ -819,6 +861,13 @@ class TrainTestModel(TypeVersionEnabled):
         xys = {}
         xys.update(cls.get_xs_from_results(results, indexs, aggregate))
         xys.update(cls.get_ys_from_results(results, indexs))
+        return xys
+
+    @classmethod
+    def get_xys_from_results_weighted(cls, results):
+        xys = {}
+        xys.update(cls.get_xs_from_results_weighted(results))
+        xys.update(cls.get_ys_from_results_weighted(results))
         return xys
 
     @classmethod

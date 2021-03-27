@@ -75,7 +75,7 @@ class FeatureAssembler(object):
 
             runner = fextractor_class(
                  self.assets,
-                 logger=None,
+                 logger=self.logger,
                  fifo_mode=self.fifo_mode,
                  delete_workdir=self.delete_workdir,
                  result_store=self.result_store,

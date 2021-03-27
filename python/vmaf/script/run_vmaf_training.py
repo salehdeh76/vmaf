@@ -11,7 +11,7 @@ from vmaf.config import DisplayConfig
 
 from vmaf.tools.misc import import_python_file, cmd_option_exists, get_cmd_option
 from vmaf.core.result_store import FileSystemResultStore
-from vmaf.routine import print_matplotlib_warning, train_test_vmaf_on_dataset
+from vmaf.routine import print_matplotlib_warning, train_test_vmaf_on_dataset, prepare_custom_logger
 from vmaf.tools.stats import ListStats
 
 __copyright__ = "Copyright 2016-2020, Netflix, Inc."
@@ -111,14 +111,14 @@ def main():
     else: # None or 'mean'
         aggregate_method = np.mean
 
-    logger = None
+    logger = prepare_custom_logger('vmaf_train')
 
     try:
         if suppress_plot:
             raise AssertionError
 
         from vmaf import plt
-        fig, ax = plt.subplots(figsize=(5, 5), nrows=1, ncols=1)
+        fig, ax = plt.subplots(figsize=(10, 10), nrows=1, ncols=1)
 
         train_test_vmaf_on_dataset(train_dataset=train_dataset, test_dataset=None,
                                    feature_param=feature_param, model_param=model_param,
@@ -133,7 +133,7 @@ def main():
                                    )
 
         bbox = {'facecolor':'white', 'alpha':0.5, 'pad':20}
-        ax.annotate('Training Set', xy=(0.1, 0.85), xycoords='axes fraction', bbox=bbox)
+        # ax.annotate('Training Set', xy=(0.1, 0.85), xycoords='axes fraction', bbox=bbox)
 
         # ax.set_xlim([-10, 110])
         # ax.set_ylim([-10, 110])

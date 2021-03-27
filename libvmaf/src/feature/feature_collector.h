@@ -28,7 +28,7 @@ typedef struct {
     struct {
         bool written;
         double value;
-    } *score;
+    } *score; // array of scores (one for each index (=frame))
     unsigned capacity;
 } FeatureVector;
 
@@ -41,7 +41,7 @@ typedef struct {
 } AggregateVector;
 
 typedef struct VmafFeatureCollector {
-    FeatureVector **feature_vector;
+    FeatureVector **feature_vector; // array of feature_vectors
     AggregateVector aggregate_vector;
     unsigned cnt, capacity;
     struct { clock_t begin, end; } timer;

@@ -1,4 +1,4 @@
-project('libvmaf', ['c', 'cpp'],
+nnproject('libvmaf', ['c', 'cpp'],
     version : '2.1.1',
     default_options : ['c_std=c11',
                        'cpp_std=c++11',

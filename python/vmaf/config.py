@@ -8,9 +8,11 @@ import urllib.error
 __copyright__ = "Copyright 2016-2020, Netflix, Inc."
 __license__ = "BSD+Patent"
 
+from datetime import datetime
+
 PYTHON_ROOT = os.path.dirname(os.path.realpath(__file__))
 ROOT = os.path.abspath(os.path.join(PYTHON_ROOT, '..', '..',))
-VMAF_RESOURCE_ROOT = "https://github.com/Netflix/vmaf_resource/raw/master"
+# VMAF_RESOURCE_ROOT = "https://github.com/Netflix/vmaf_resource/raw/master"
 
 
 def download_reactively(local_path, remote_path):
@@ -217,6 +219,6 @@ class DisplayConfig(object):
                 os.makedirs(filedir)
             for fignum in plt.get_fignums():
                 fig = plt.figure(fignum)
-                fig.savefig(os.path.join(filedir, str(fignum) + '.' + format), format=format)
+                fig.savefig(os.path.join(filedir, f'{str(fignum)}_{datetime.now().strftime("%Y%m%d-%H%M%S")}.{format}'), format=format)
         else:
             plt.show()

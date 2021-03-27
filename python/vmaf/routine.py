@@ -1,4 +1,8 @@
+import logging
 import os
+import statistics
+import time
+from datetime import datetime
 import numpy as np
 
 from vmaf import plt
@@ -14,6 +18,11 @@ from vmaf.core.local_explainer import LocalExplainer
 
 __copyright__ = "Copyright 2016-2020, Netflix, Inc."
 __license__ = "BSD+Patent"
+
+
+mpl_logger = logging.getLogger('matplotlib')
+mpl_logger.setLevel(logging.WARNING)
+
 
 
 def read_dataset(dataset, **kwargs):
@@ -244,6 +253,12 @@ def read_dataset(dataset, **kwargs):
         if end_frame_ is not None:
             asset_dict['end_frame'] = end_frame_
 
+        if 'selection_weight' in dis_video:
+            asset_dict['selection_weight'] = dis_video.get('selection_weight', None)
+
+        if 'panorama_id' in dis_video:
+            asset_dict['panorama_id'] = dis_video.get('panorama_id', None)
+
         if groundtruth is None and skip_asset_with_none_groundtruth:
             pass
         else:
@@ -266,6 +281,8 @@ def run_test_on_dataset(test_dataset, runner_class, ax,
                     aggregate_method=np.mean,
                     type='regressor',
                     **kwargs):
+    # kwargs will have: subj_model_class   enable_transform_score      processes
+    # available kwargs :  split_test_indices_for_perf_ci
 
     test_assets = read_dataset(test_dataset, **kwargs)
     test_raw_assets = None
@@ -322,11 +339,14 @@ def run_test_on_dataset(test_dataset, runner_class, ax,
     if processes is not None:
         assert parallelize is True, 'if processes is not None, parallelize must be True'
 
+    logger = prepare_custom_logger('vmaf_test')
+
     # run
     runner = runner_class(
         test_assets,
-        None, fifo_mode=fifo_mode,
-        delete_workdir=True,
+        logger,
+        fifo_mode=fifo_mode,
+        delete_workdir=False, #True,
         result_store=result_store,
         optional_dict=optional_dict,
         optional_dict2=None,
@@ -351,8 +371,10 @@ def run_test_on_dataset(test_dataset, runner_class, ax,
         if 'split_test_indices_for_perf_ci' in kwargs else False
 
     # plot
-    groundtruths = list(map(lambda asset: asset.groundtruth, test_assets))
-    predictions = list(map(lambda result: result[runner_class.get_score_key()], results))
+    # groundtruths = list(map(lambda asset: asset.groundtruth, test_assets))
+    # predictions = list(map(lambda result: result[runner_class.get_score_key()], results))
+    groundtruths = build_weighted_groundtruth(test_assets)
+    predictions = build_weighted_predictions(results, runner_class)
     raw_grountruths = None if test_raw_assets is None else \
         list(map(lambda asset: asset.raw_groundtruth, test_raw_assets))
     groundtruths_std = None if test_assets is None else \
@@ -411,7 +433,8 @@ def run_test_on_dataset(test_dataset, runner_class, ax,
         else:
             point_labels = None
 
-        model_type.plot_scatter(ax, stats, content_ids=content_ids, point_labels=point_labels, **kwargs)
+        # model_type.plot_scatter(ax, stats, content_ids=content_ids, point_labels=point_labels, **kwargs)
+        model_type.plot_scatter(ax, stats, point_labels=point_labels, **kwargs)
         ax.set_xlabel('True Score')
         ax.set_ylabel("Predicted Score")
         ax.grid()
@@ -425,6 +448,49 @@ def run_test_on_dataset(test_dataset, runner_class, ax,
     return test_assets, results
 
 
+def build_weighted_groundtruth(assets):
+    seen_panorama_ids = list()
+    out = []
+    for a in assets:
+        panorama_id = a.asset_dict['panorama_id']
+        if panorama_id in seen_panorama_ids:
+            continue
+        seen_panorama_ids.append(panorama_id)
+        out.append(a.groundtruth)
+    return out
+
+def build_weighted_predictions(results, runner_class):
+    out = []
+    current_panorama_id = None
+    buffer = []
+    for r in results:
+        panorama_id = r.asset.asset_dict['panorama_id']
+        weight = r.asset.asset_dict['selection_weight']
+        if current_panorama_id is None:
+            current_panorama_id = panorama_id
+        if panorama_id != current_panorama_id:
+            out.append(statistics.mean(buffer))
+            buffer = []
+            current_panorama_id = panorama_id
+        buffer += [r[runner_class.get_score_key()]] * weight
+    out.append(statistics.mean(buffer))
+    return out
+
+
+
+
+def prepare_custom_logger(name):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    f_handler = logging.FileHandler(os.path.join('resource', 'loggers', f'{name}_{datetime.now().strftime("%Y%m%d-%H%M")}.log'),
+                                    mode='w')
+    f_handler.setLevel(logging.INFO)
+    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    f_handler.setFormatter(f_format)
+    logger.addHandler(f_handler)
+    return logger
+
+
 def print_matplotlib_warning():
     print("Warning: cannot import matplotlib, no picture displayed. " \
           "If you are on Mac OS and have installed matplotlib, you " \
@@ -432,6 +498,14 @@ def print_matplotlib_warning():
           "sudo pip install python-dateutil==2.2 \n" \
           "Refer to: http://stackoverflow.com/questions/27630114/matplotlib-issue-on-os-x-importerror-cannot-import-name-thread")
 
+
+def calc_selection_weight_indices(assets):
+    # return None
+
+    result = []
+    for i, asset in enumerate(assets):
+        result += [i] * asset.asset_dict['selection_weight']
+    return result
 
 def train_test_vmaf_on_dataset(train_dataset, test_dataset,
                                feature_param, model_param,
@@ -458,7 +532,7 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
         train_raw_assets = train_assets
         train_assets = read_dataset(train_dataset_aggregate, **kwargs)
 
-    parallelize = kwargs['parallelize'] if 'parallelize' in kwargs else True
+    parallelize = kwargs['parallelize'] if 'parallelize' in kwargs else False
     isinstance(parallelize, bool)
 
     processes = kwargs['processes'] if 'processes' in kwargs else None
@@ -491,9 +565,15 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
 
     model_class = TrainTestModel.find_subclass(model_type)
 
-    train_xys = model_class.get_xys_from_results(train_features)
-    train_xs = model_class.get_xs_from_results(train_features)
-    train_ys = model_class.get_ys_from_results(train_features)
+    selection_weight_indices = calc_selection_weight_indices(train_assets)
+    aggregate=True
+
+    train_xys = model_class.get_xys_from_results(train_features, indexs=selection_weight_indices, aggregate=aggregate)
+    train_xs = model_class.get_xs_from_results(train_features, indexs=selection_weight_indices, aggregate=aggregate)
+    train_ys = model_class.get_ys_from_results(train_features, indexs=selection_weight_indices)
+    # train_xys = model_class.get_xys_from_results_weighted(train_features)
+    # train_xs = model_class.get_xs_from_results_weighted(train_features)
+    # train_ys = model_class.get_ys_from_results_weighted(train_features)
 
     model = model_class(model_param_dict, logger)
 
@@ -533,15 +613,16 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
             assert False
 
     if train_ax is not None:
-        train_content_ids = list(map(lambda asset: asset.content_id, train_assets))
-        model_class.plot_scatter(train_ax, train_stats, content_ids=train_content_ids)
+        # train_content_ids = list(map(lambda asset: asset.content_id, train_assets))
+        # model_class.plot_scatter(train_ax, train_stats, content_ids=train_content_ids)
+        model_class.plot_scatter(train_ax, train_stats)
 
         train_ax.set_xlabel('True Score')
         train_ax.set_ylabel("Predicted Score")
         train_ax.grid()
         train_ax.set_title("Dataset: {dataset}, Model: {model}\n{stats}".format(
             dataset=train_dataset.dataset_name,
-            model=model.model_id,
+            model=model.model_id.replace('_V0.1', ''),
             stats=model_class.format_stats_for_plot(train_stats)
         ))
 
@@ -587,10 +668,18 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
         for result in test_features:
             result.set_score_aggregate_method(aggregate_method)
 
-        test_xs = model_class.get_xs_from_results(test_features)
-        test_ys = model_class.get_ys_from_results(test_features)
+        # selection_weight_indices_test = calc_selection_weight_indices(test_assets)
 
+        # test_xs = model_class.get_xs_from_results(test_features)
+        # test_ys = model_class.get_ys_from_results(test_features)
+        test_xs = model_class.get_xs_from_results_weighted(test_features)
+        test_ys = model_class.get_ys_from_results_weighted(test_features)
+
+
+        start_time = time.perf_counter()
         test_ys_pred = VmafQualityRunner.predict_with_model(model, test_xs, **kwargs)['ys_pred']
+        print(f'DURATION {time.perf_counter()-start_time}')
+
 
         raw_groundtruths = None if test_raw_assets is None else \
             list(map(lambda asset: asset.raw_groundtruth, test_raw_assets))
@@ -604,14 +693,14 @@ def train_test_vmaf_on_dataset(train_dataset, test_dataset,
             print(log)
 
         if test_ax is not None:
-            test_content_ids = list(map(lambda asset: asset.content_id, test_assets))
-            model_class.plot_scatter(test_ax, test_stats, content_ids=test_content_ids)
+            # test_content_ids = list(map(lambda asset: asset.content_id, test_assets))
+            model_class.plot_scatter(test_ax, test_stats)
             test_ax.set_xlabel('True Score')
             test_ax.set_ylabel("Predicted Score")
             test_ax.grid()
             test_ax.set_title("Dataset: {dataset}, Model: {model}\n{stats}".format(
                 dataset=test_dataset.dataset_name,
-                model=model.model_id,
+                model=model.model_id.replace('_V0.1', ''),
                 stats=model_class.format_stats_for_plot(test_stats)
             ))
 
@@ -632,7 +721,8 @@ def cv_on_dataset(dataset, feature_param, model_param, ax, result_store,
                   contentid_groups, logger=None, aggregate_method=np.mean):
 
     assets = read_dataset(dataset)
-    kfold = construct_kfold_list(assets, contentid_groups)
+    # kfold = construct_kfold_list(assets, contentid_groups)
+    kfold = 4
 
     fassembler = FeatureAssembler(
         feature_dict=feature_param.feature_dict,
@@ -643,7 +733,7 @@ def cv_on_dataset(dataset, feature_param, model_param, ax, result_store,
         result_store=result_store,
         optional_dict=None,
         optional_dict2=None,
-        parallelize=True, fifo_mode=True,
+        parallelize=False, fifo_mode=True,
         # parallelize=False, fifo_mode=False, # VQM
     )
     fassembler.run()
@@ -695,7 +785,7 @@ def run_vmaf_cv(train_dataset_filepath,
 
     result_store_dir = kwargs['result_store_dir'] if 'result_store_dir' in kwargs else VmafConfig.file_result_store_path()
 
-    parallelize = kwargs['parallelize'] if 'parallelize' in kwargs else True
+    parallelize = kwargs['parallelize'] if 'parallelize' in kwargs else False
     isinstance(parallelize, bool)
 
     logger = get_stdout_logger()
@@ -713,7 +803,7 @@ def run_vmaf_cv(train_dataset_filepath,
     fig, axs = plt.subplots(figsize=(5*ncols, 5*nrows), nrows=nrows, ncols=ncols)
 
     train_test_vmaf_on_dataset(train_dataset, test_dataset, param, param, axs[0], axs[1],
-                               result_store, logger=None,
+                               result_store, logger=kwargs.pop('logger'),
                                output_model_filepath=output_model_filepath,
                                **kwargs)
 
@@ -726,8 +816,10 @@ def run_vmaf_cv(train_dataset_filepath,
         axs[1].set_ylim(kwargs['ylim'])
 
     bbox = {'facecolor':'white', 'alpha':1, 'pad':20}
-    axs[0].annotate('Training Set', xy=(0.1, 0.85), xycoords='axes fraction', bbox=bbox)
-    axs[1].annotate('Testing Set', xy=(0.1, 0.85), xycoords='axes fraction', bbox=bbox)
+    axs[0].annotate(f'count:{kwargs["selection_count"]}', xy=(0.1, 0.85), xycoords='axes fraction', bbox=bbox)
+
+    # axs[0].annotate('Training Set', xy=(0.1, 0.85), xycoords='axes fraction', bbox=bbox)
+    # axs[1].annotate('Testing Set', xy=(0.1, 0.85), xycoords='axes fraction', bbox=bbox)
 
     plt.tight_layout()
 
@@ -740,9 +832,10 @@ def run_vmaf_kfold_cv(dataset_filepath,
                       param_filepath,
                       aggregate_method,
                       result_store_dir=VmafConfig.file_result_store_path(),
+                      logger=None,
                       ):
 
-    logger = get_stdout_logger()
+    logger = logger or get_stdout_logger()
     result_store = FileSystemResultStore(result_store_dir)
     dataset = import_python_file(dataset_filepath)
     param = import_python_file(param_filepath)

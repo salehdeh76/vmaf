@@ -11,6 +11,10 @@
 .venv*/
 __pycache__/
 build/
+build_wsl/
+build_*/
 dist/
 vmaf_output.xml
 compile_commands.json
+
+*.rar

@@ -171,7 +171,7 @@ def main():
                                               )
 
         bbox = {'facecolor':'white', 'alpha':0.5, 'pad':20}
-        ax.annotate('Testing Set', xy=(0.1, 0.85), xycoords='axes fraction', bbox=bbox)
+        # ax.annotate('Testing Set', xy=(0.1, 0.85), xycoords='axes fraction', bbox=bbox)
 
         # ax.set_xlim([-10, 110])
         # ax.set_ylim([-10, 110])
@@ -184,6 +184,7 @@ def main():
             DisplayConfig.show(write_to_dir=save_plot_dir)
 
     except ImportError:
+        assert False
         print_matplotlib_warning()
         assets, results = run_test_on_dataset(test_dataset, runner_class, None,
                                               result_store, vmaf_model_path,
@@ -193,15 +194,15 @@ def main():
                                               enable_transform_score=enable_transform_score,
                                               processes=processes,
                                               )
-    except AssertionError:
-        assets, results = run_test_on_dataset(test_dataset, runner_class, None,
-                                              result_store, vmaf_model_path,
-                                              parallelize=parallelize,
-                                              aggregate_method=aggregate_method,
-                                              subj_model_class=subj_model_class,
-                                              enable_transform_score=enable_transform_score,
-                                              processes=processes,
-                                              )
+    # except AssertionError:
+    #     assets, results = run_test_on_dataset(test_dataset, runner_class, None,
+    #                                           result_store, vmaf_model_path,
+    #                                           parallelize=parallelize,
+    #                                           aggregate_method=aggregate_method,
+    #                                           subj_model_class=subj_model_class,
+    #                                           enable_transform_score=enable_transform_score,
+    #                                           processes=processes,
+    #                                           )
 
     if print_result:
         for result in results:

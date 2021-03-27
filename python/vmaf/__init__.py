@@ -145,6 +145,10 @@ class ExternalProgramCaller(object):
             '--output', log_file_path,
             '--xml',
             '--no_prediction',
+            '--subsample', '10',
+            '--threads', '10',
+
+            # todo saleh: add extra args here
         ]
 
         if options is not None and 'disable_avx' in options:

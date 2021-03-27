@@ -1,7 +1,11 @@
 import subprocess
 from fnmatch import fnmatch
 import multiprocessing
-multiprocessing.set_start_method('fork')
+try:
+    pass
+    # multiprocessing.set_start_method('fork')
+except ValueError:  # noqa, If platform does not support, just ignore
+    pass
 from time import sleep, time
 import itertools
 
@@ -21,6 +25,7 @@ try:
 
 except NameError:
     unicode = str
+
 
 
 def get_stdout_logger():
@@ -213,10 +218,10 @@ def make_absolute_path(path, current_dir):
     '/abc/cde.fg'
 
     '''
-    if path[0] == '/':
+    if os.path.isabs(path):
         return path
     else:
-        return current_dir + path
+        return os.path.join(current_dir, path)
 
 
 def empty_object():

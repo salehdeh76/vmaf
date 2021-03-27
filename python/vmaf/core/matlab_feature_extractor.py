@@ -50,7 +50,7 @@ class StrredFeatureExtractor(MatlabFeatureExtractor):
         dis_procfile_path = asset.dis_procfile_path
         log_file_path = self._get_log_file_path(asset)
 
-        current_dir = os.getcwd() + '/'
+        current_dir = os.getcwd()
 
         ref_procfile_path = make_absolute_path(ref_procfile_path, current_dir)
         dis_procfile_path = make_absolute_path(dis_procfile_path, current_dir)
